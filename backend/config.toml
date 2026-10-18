@@ -1,0 +1,36 @@
+# 连接信息与密钥请按实际环境填写。
+[COMMON]
+port = 8180
+open_tls = false
+
+[MySQL]
+url = ""
+user = ""
+pwd = ""
+db_name = ""
+
+[MongoDB]
+url = ""
+user = ""
+pwd = ""
+database = ""
+# 连接池占位值，请按实际需求调整。
+max_pool = 100
+min_pool = 0
+
+[Redis]
+url = ""
+pwd = ""
+db = 0
+
+[JWT]
+# 启用前必须填写签名密钥。
+secret = ""
+# token 有效期，单位：小时。
+expire = 24
+enable = true
+
+[RateLimit]
+enable = true
+window_seconds = 60
+max_requests = 20
