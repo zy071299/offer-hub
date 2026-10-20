@@ -2,9 +2,10 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 
 import { AppProvider } from '@/components/provider/app-provider'
 import { HomePage } from '@/pages/home-page'
+import QuestionCollections from '@/pages/QuestionCollections'
 import { NotFoundPage } from '@/pages/not-found-page'
-import { QuestionDetailPage } from '@/pages/question-detail-page'
-import { QuestionsPage } from '@/pages/questions-page'
+import QuestionDetail from '@/pages/QuestionDetail'
+import Questions from '@/pages/Questions'
 
 export default function App() {
   return (
@@ -12,8 +13,9 @@ export default function App() {
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/questions" element={<QuestionsPage />} />
-          <Route path="/questions/:id" element={<QuestionDetailPage />} />
+          <Route path="/collections" element={<QuestionCollections />} />
+          <Route path="/questions" element={<Questions />} />
+          <Route path="/questions/:question_id" element={<QuestionDetail />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>

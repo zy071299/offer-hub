@@ -3,11 +3,17 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
+	"offer-hub/backend/src/ctrl/auth"
 	"offer-hub/backend/src/ctrl/question"
+	"offer-hub/backend/src/ctrl/user"
 )
 
-// RegisterRouter 注册题目模块路由，分组暂不添加中间件。
+// RegisterRouter 注册鉴权、用户和题目模块路由，此阶段暂不挂鉴权中间件。
 func RegisterRouter(router *gin.Engine) {
+	router.POST("/auth/register", auth.Register)
+	router.POST("/auth/login", auth.Login)
+	router.POST("/auth/logout", auth.Logout)
+	router.GET("/api/v1/user_info/get_user_info", user.GetUserInfo)
 	questionGroup := router.Group("/api/v1/question")
 	{
 		questionGroup.GET("/all/list", question.GetQuestionBankSeries)

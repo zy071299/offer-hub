@@ -32,7 +32,7 @@ go run ./src
 
 `config.toml` 保留为通用模板，入口默认加载 `config-test.toml`。连接信息和 JWT 密钥需按环境填写。旧的 `HTTP_ADDR`、`MYSQL_DSN`、`MONGO_URI`、`MONGO_DATABASE` 环境变量不再用于配置。
 
-配置模块仅负责读取数据，不执行完整性校验。数据库连接初始化已接入启动流程；HTTPS、JWT 验证和限流逻辑尚未实现。
+配置模块仅负责读取数据，不执行完整性校验。数据库连接初始化已接入启动流程；登出接口已实现 JWT 验证，HTTPS 和限流逻辑尚未实现。
 
 ## 检查
 
@@ -52,7 +52,7 @@ MySQL 与 MongoDB 必须连接成功；JWT 或限流开启时，Redis 也必须�
 
 连接初始化均执行 Ping 并设置 5 秒连接超时；失败返回错误并清理本次已创建的连接。全部成功后才保存全局实例。重复初始化返回错误，初始化前 getter 返回 `nil`。连接应在服务启动前初始化，业务停止后调用 `Data.Close()` / `data.CloseRedis()`，不要与正在使用连接的请求并发关闭。
 
-此处只建立连接，不创建数据库、迁移表结构，也不实现 JWT 黑名单或限流逻辑。
+此处只建立连接，不创建数据库、迁移表结构。JWT 黑名单由鉴权业务层使用 Redis 管理，限流逻辑尚未实现。
 
 
 
@@ -108,6 +108,36 @@ service 复用题目字段转换，按当前阶段要求返回完整 `content`�
 独立的 data 查询固定过滤 `status = 1`，可按 `job_name` 精确过滤，按 `hot_degree` 降序、同热度按 `question_id` 升序，不复用 `FilterQuestions` 的浏览量排序。Mongo 查询投影及接口列表项仅含 `question_id`、`bank_list`、`title`、`view_count`（Mongo `_id` 不返回）。
 
 service 返回 `GetHotQuestionsResp`，复用已有热门列表 DTO，空结果返回 `data.list: []`。成功业务码 0，参数错误 400，数据库失败 500，HTTP 状态均为 200。查询命令、字段投影、默认 limit、过滤和错误响应由测试覆盖；尚未进行真实 MongoDB 联调。
+
+## 用户注册
+
+`POST /auth/register` 无需登录，JSON 请求体包含 `username`、`password`。用户名不可为空或全空白，最长 50 个 Unicode 字符；密码最少 6 个 Unicode 字符，受 bcrypt 限制最多 72 字节。密码使用 bcrypt cost 12 加密，`user_id` 为 UUID v4，昵称默认等于用户名。
+
+在目标 MySQL 数据库中执行 `testdata/init_mysql_schema.sql` 创建 `t_user_info`（仅建表，无业务数据；不会迁移已有的 `user` 表）。启动流程不自动建表。用户名唯一索引同时处理并发注册冲突。
+
+响应 HTTP 状态为 200，`data` 为 `null`：成功 `code: 0, msg: "注册成功"`；参数错误 `code: 400, msg: "用户名或密码不符合要求"`；用户名重复 `code: 500, msg: "用户名已存在"`；存储等内部错误 `code: 500, msg: "服务器内部错误"`。
+
+## 用户登录
+
+`POST /auth/login` 无需登录，JSON 请求体包含必填的 `username`、`password`。从 `t_user_info` 查询用户并用 bcrypt 校验密码，成功返回 `code: 0, msg: "登录成功"`，`data` 包含 `token` 和 `userInfo`。`userInfo` 使用认证文档规定的 camelCase 字段，包含 `userId`、`nickName`、`userStatus`、`userType` 等，不返回密码哈希。
+
+JWT 使用 HS256 签名，密钥读取 `JWT.secret`，有效期读取 `JWT.expire`（小时），payload 包含 `user_id`、`iat`、`exp`。密钥为空、有效期非正数或超出可表示范围时返回内部错误。登录始终签发 token；`JWT.enable` 不控制登录响应。
+
+响应 HTTP 状态为 200；参数错误返回业务码 `400`、`用户名或密码不符合要求`，用户不存在或密码错误统一返回 `401`、`用户名或密码错误`，内部错误返回 `500`、`服务器内部错误`。错误响应的 `data` 均为 `null`。
+
+## 用户登出
+
+`POST /auth/logout` 无请求体，必须携带 `Authorization: Bearer <token>`。校验 HS256 签名、`user_id`、有效期及 Redis 黑名单后，将 `blacklist:<token>` 写入 Redis，TTL 为 `exp` 减当前时间。原子 `SET NX` 避免并发登出覆盖已有记录的过期时间。
+
+成功返回 HTTP 200、`{"code":0,"msg":"success","data":{"message":"登出成功"}}`。缺失、无效、过期或已拉黑的 token 返回业务码 `401`、`msg: "未认证"`；Redis 或 JWT 配置错误返回 `500`。错误响应的 `data` 为 `null`，HTTP 状态保持 200。
+
+需配置 `JWT.secret` 与登录一致，并启用 `JWT.enable = true`、填写 Redis 连接配置，以便启动时初始化 Redis。`LogoutService.AuthenticateToken` 可供后续强制鉴权入口复用；目前登出接口接入黑名单校验，其他接口仍按各自现有鉴权行为执行。
+
+## 获取用户信息
+
+`GET /api/v1/user_info/get_user_info` 当前按阶段约定直接读取请求 Header 中的 `user_id` 作为测试身份；JWT 中间件接入后需切换为中间件提供的可信身份，此阶段不校验该接口的 Bearer token。缺失、空白或重复的 `user_id` Header 返回业务码 `401`。
+
+按 `user_id` 查询 `t_user_info`，成功返回 `code: 0, msg: "success"`，`data` 包含认证文档列出的 14 个 snake_case 字段。`avatar_url` 与 `avatar` 相同，时间格式为 `YYYY-MM-DD HH:mm:ss`，空时间为 `""`；查询不读取密码。用户不存在返回业务码 `404`、`用户不存在`，数据库错误返回 `500`、`服务器内部错误`，错误的 `data` 为 `null`，HTTP 状态均为 200。
 
 ## 本地种子数据
 

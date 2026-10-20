@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS `t_user_info` (
+    `id` INT NOT NULL AUTO_INCREMENT,
+    `user_id` VARCHAR(256) NOT NULL,
+    `username` VARCHAR(50) NOT NULL,
+    `password` VARCHAR(100) NOT NULL,
+    `nick_name` VARCHAR(256) NOT NULL DEFAULT '',
+    `avatar` VARCHAR(256) NOT NULL DEFAULT '',
+    `introduction` VARCHAR(1024) NOT NULL DEFAULT '',
+    `phone` VARCHAR(256) NOT NULL DEFAULT '',
+    `email` VARCHAR(256) NOT NULL DEFAULT '',
+    `sex` TINYINT NULL DEFAULT 1,
+    `vip` TINYINT NULL DEFAULT 0,
+    `user_status` TINYINT NULL DEFAULT 1,
+    `user_type` TINYINT NULL DEFAULT 1,
+    `create_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
+    `update_time` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_id` (`user_id`),
+    UNIQUE KEY `uk_username` (`username`),
+    KEY `idx_phone` (`phone`),
+    KEY `idx_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
