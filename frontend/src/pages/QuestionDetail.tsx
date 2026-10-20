@@ -3,8 +3,10 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import DetailContent from '@/components/detail/DetailContent'
+import Comments from '@/components/comment/Comments'
 import { useBankQuestionList, useQuestionDetail } from '@/hooks/useQuestionQueries'
 import { QuestionApiError } from '@/services/question'
+import { TargetType } from '@/types/comment'
 
 const difficultyLabels = { 1: '简单', 2: '中等', 3: '困难' } as const
 
@@ -114,6 +116,7 @@ export default function QuestionDetail() {
               </div>
             </header>
             <DetailContent content={detail.data.content} />
+            <Comments targetType={TargetType.QUESTION} targetId={questionId} />
           </article>
         </div>
       ) : null}
