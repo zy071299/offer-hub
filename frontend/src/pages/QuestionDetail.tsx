@@ -1,8 +1,8 @@
 import axios from 'axios'
-import ReactMarkdown from 'react-markdown'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
+import DetailContent from '@/components/detail/DetailContent'
 import { useBankQuestionList, useQuestionDetail } from '@/hooks/useQuestionQueries'
 import { QuestionApiError } from '@/services/question'
 
@@ -113,9 +113,7 @@ export default function QuestionDetail() {
                 ))}
               </div>
             </header>
-            <div className="question-markdown">
-              <ReactMarkdown>{detail.data.content}</ReactMarkdown>
-            </div>
+            <DetailContent content={detail.data.content} />
           </article>
         </div>
       ) : null}

@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 
 import { AppProvider } from '@/components/provider/app-provider'
+import Header from '@/components/Header'
 import { HomePage } from '@/pages/home-page'
 import QuestionCollections from '@/pages/QuestionCollections'
 import { NotFoundPage } from '@/pages/not-found-page'
@@ -11,6 +12,7 @@ export default function App() {
   return (
     <AppProvider>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Header />
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/collections" element={<QuestionCollections />} />
