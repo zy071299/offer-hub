@@ -1,31 +1,30 @@
-# 连接信息与密钥请按实际环境填写。
+# 本地测试配置，数据库连接对应 docker-compose.yml。
 [COMMON]
 port = 8180
 open_tls = false
 
 [MySQL]
-url = ""
-user = ""
-pwd = ""
-db_name = ""
+url = "127.0.0.1:3307"
+user = "root"
+pwd = "1234"
+db_name = "offer_hub"
 
 [MongoDB]
-url = ""
+url = "mongodb://127.0.0.1:27017"
 user = ""
 pwd = ""
-database = ""
-# 连接池占位值，请按实际需求调整。
+database = "offer_hub_test"
 max_pool = 100
 min_pool = 0
 
 [Redis]
-url = ""
+url = "127.0.0.1:6379"
 pwd = ""
 db = 0
 
 [JWT]
-# 启用前必须填写签名密钥。
-secret = ""
+# 随机生成的本地测试签名密钥。
+secret = "Q7/vmDn/+D9VBfP2nwzI9LdxzS1We0I5vaoVCTq+ZSA="
 # token 有效期，单位：小时。
 expire = 24
 enable = true

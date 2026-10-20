@@ -48,6 +48,7 @@ work=$(mktemp -d)
 cat > "$work/check.py" <<'PY'
 import json
 import sys
+from urllib.parse import quote
 
 # Windows Python 也输出 LF，避免 Bash 提取的 ID 带有 CR。
 sys.stdout.reconfigure(newline='\n')
@@ -98,6 +99,12 @@ def listing(body):
 
 def main():
     action, path, *args = sys.argv[1:]
+    if action == 'encode':
+        # 从管道读取原始 UTF-8 字节，不把中文放进 Windows curl 的 argv。
+        raw = sys.stdin.buffer.read().decode('utf-8')
+        name, value = raw.split('=', 1)
+        print(quote(name, safe='') + '=' + quote(value, safe=''))
+        return
     body = load(path)
     if action == 'extract':
         key = args[0]
@@ -228,11 +235,25 @@ check() {
   local -a validation=()
   while (( $# > 0 )) && [[ "$1" != '--' ]]; do validation+=("$1"); shift; done
   if (( $# > 0 )); then shift; fi
+  # Git Bash 调用某些 Windows curl 时，中文 argv 会被转成系统代码页。
+  # 先用 Python 编成纯 ASCII query，再用 --data（非 --data-urlencode）发送，避免二次编码。
+  local -a curl_query=()
+  local encoded
+  while (( $# > 0 )); do
+    if [[ "$1" != '--data-urlencode' ]] || (( $# < 2 )); then
+      fail "$label：内部 query 参数格式错误"; return 1
+    fi
+    if ! encoded=$(printf '%s' "$2" | "$PYTHON_BIN" "$work/check.py" encode -); then
+      fail "$label：UTF-8 query 编码失败"; return 1
+    fi
+    curl_query+=(--data "$encoded")
+    shift 2
+  done
   local http
   if ! http=$(curl -q --silent --show-error --connect-timeout 3 --max-time 15 \
       --get --header 'Accept: application/json' --header 'Authorization:' \
       --output "$work/$key.json" --write-out '%{http_code}' \
-      "$BASE_URL/api/v1/question$route" "$@"); then
+      "$BASE_URL/api/v1/question$route" "${curl_query[@]}"); then
     fail "$label：curl 请求失败"; return 1
   fi
   if [[ "$http" != 200 ]]; then fail "$label：HTTP=$http，预期 200"; return 1; fi
