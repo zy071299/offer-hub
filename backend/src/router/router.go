@@ -5,16 +5,20 @@ import (
 	"github.com/gin-gonic/gin"
 	"offer-hub/backend/src/ctrl/auth"
 	"offer-hub/backend/src/ctrl/question"
+	"offer-hub/backend/src/ctrl/tools"
 	"offer-hub/backend/src/ctrl/user"
 )
 
-// RegisterRouter 注册鉴权、用户和题目模块路由，此阶段暂不挂鉴权中间件。
+// RegisterRouter 为题目组挂软鉴权，为登出和用户信息组挂强制鉴权。
 func RegisterRouter(router *gin.Engine) {
 	router.POST("/auth/register", auth.Register)
 	router.POST("/auth/login", auth.Login)
-	router.POST("/auth/logout", auth.Logout)
-	router.GET("/api/v1/user_info/get_user_info", user.GetUserInfo)
-	questionGroup := router.Group("/api/v1/question")
+	router.POST("/auth/logout", tools.JWTAuthMiddleware(), auth.Logout)
+	userGroup := router.Group("/api/v1/user_info", tools.JWTAuthMiddleware())
+	{
+		userGroup.GET("/get_user_info", user.GetUserInfo)
+	}
+	questionGroup := router.Group("/api/v1/question", tools.SoftJWTAuthMiddleware())
 	{
 		questionGroup.GET("/all/list", question.GetQuestionBankSeries)
 		questionGroup.GET("/list", question.ListQuestions)

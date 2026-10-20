@@ -28,6 +28,8 @@ db = 0
 secret = ""
 # token 有效期，单位：小时。
 expire = 24
+# 后续 token 缓存有效期，单位小时；当前中间件仅读黑名单，不刷新 TTL。
+token_cache_expire = 2
 enable = true
 
 [RateLimit]

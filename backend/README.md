@@ -78,7 +78,7 @@ MySQL 与 MongoDB 必须连接成功；JWT 或限流开启时，Redis 也必须�
 - 多标签固定使用 `$all`：所有标签均匹配。分页默认 `page=1`、`page_size=20`。
 - 接口文档未规定默认排序，本次约定为 `create_time desc`。允许按 `create_time`、`view_count`、`thumbs_up_count`、`dislike_count` 升序或降序，增加 `question_id` 升序作为同值排序依据。
 - `total` 为分页前总数，统计和查询复用同一过滤条件；空结果返回 `list: []`。
-- 本次实现游客行为，尚未接入软 JWT 鉴权：忽略 `user_tag` 过滤，`user_tag=0`、`user_liked=false`；service 层将 `content` 截断至前 150 个 Unicode 字符。登录用户的完整内容及个性化状态将在鉴权接入后实现。
+- 题目路由组已接入软 JWT 鉴权并传递可信 `user_id`。当前业务查询仍按游客规则执行：忽略 `user_tag` 过滤，`user_tag=0`、`user_liked=false`；service 层将 `content` 截断至前 150 个 Unicode 字符。登录用户的完整内容及个性化状态尚待业务层接入。
 - 非法分页、难度或排序参数返回 HTTP 200、业务码 400；数据库错误返回业务码 500，错误详情不向客户端暴露。
 
 分层：ctrl 绑定并校验 query → service 调用查询并转换展示字段 → data 构建 BSON、统计与分页查询。BSON 文档结构使用数据字典中的字段和类型，数据库层不截断内容。
@@ -133,9 +133,19 @@ JWT 使用 HS256 签名，密钥读取 `JWT.secret`，有效期读取 `JWT.expir
 
 需配置 `JWT.secret` 与登录一致，并启用 `JWT.enable = true`、填写 Redis 连接配置，以便启动时初始化 Redis。`LogoutService.AuthenticateToken` 可供后续强制鉴权入口复用；目前登出接口接入黑名单校验，其他接口仍按各自现有鉴权行为执行。
 
+## JWT 强制鉴权中间件
+
+`src/ctrl/tools/jwt_middleware.go` 提供 `tools.JWTAuthMiddleware()`，已挂载到 `/auth/logout` 和 `/api/v1/user_info` 路由组。创建前需先加载配置，读取 `config.Conf.JWT.Secret`，并初始化 Redis。注册与登录接口无需鉴权。
+
+中间件先移除客户端传入的 `user_id`，检查唯一的 `Authorization: Bearer <token>`、HS256 签名、有效期及 `blacklist:<token>`；成功后将可信 `user_id` 写入请求 Header 并继续处理。缺失、无效、过期或拉黑的 token 返回业务码 `401`、`未认证` 并终止请求；Redis 或配置错误返回 `500`，错误的 `data` 均为 `null`，HTTP 状态沿用 200。
+
+`JWT.token_cache_expire` 对应 `config.Conf.JWT.TokenCacheExpire`，单位小时，为后续 token 缓存预留。当前验证流程仅读取黑名单，不新增缓存、不写入或刷新 Redis TTL；登出黑名单仍使用 token 的剩余有效期。
+
+`tools.SoftJWTAuthMiddleware()` 已挂载到 `/api/v1/question` 路由组：无 token、格式错误、签名无效或已过期时均继续调用后续 Handler；有效 token 的 `user_id` 写入请求 Header。它会先清除客户端传入的身份，不返回鉴权错误，也不访问 Redis 黑名单。Handler 可根据 `user_id` 是否为空区分游客与登录用户。
+
 ## 获取用户信息
 
-`GET /api/v1/user_info/get_user_info` 当前按阶段约定直接读取请求 Header 中的 `user_id` 作为测试身份；JWT 中间件接入后需切换为中间件提供的可信身份，此阶段不校验该接口的 Bearer token。缺失、空白或重复的 `user_id` Header 返回业务码 `401`。
+`GET /api/v1/user_info/get_user_info` 通过强制 JWT 鉴权后，从请求 Header 中读取中间件写入的可信 `user_id`。客户端直接提供的 `user_id` 会被中间件清除，需携带有效且未拉黑的 Bearer token；缺失、无效或过期的 token 返回业务码 `401`。
 
 按 `user_id` 查询 `t_user_info`，成功返回 `code: 0, msg: "success"`，`data` 包含认证文档列出的 14 个 snake_case 字段。`avatar_url` 与 `avatar` 相同，时间格式为 `YYYY-MM-DD HH:mm:ss`，空时间为 `""`；查询不读取密码。用户不存在返回业务码 `404`、`用户不存在`，数据库错误返回 `500`、`服务器内部错误`，错误的 `data` 为 `null`，HTTP 状态均为 200。
 

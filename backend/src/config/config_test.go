@@ -33,6 +33,7 @@ db = 2
 [JWT]
 secret = "test-secret"
 expire = 24
+token_cache_expire = 2
 enable = true
 [RateLimit]
 enable = true
@@ -50,7 +51,7 @@ max_requests = 20
 		MySQL:     MySQLConfig{URL: "mysql-host:3306", User: "mysql-user", Pwd: "mysql-password", DBName: "offers"},
 		MongoDB:   MongoDBConfig{URL: "mongodb://localhost:27017", User: "mongo-user", Pwd: "mongo-password", Database: "questions", MaxPool: 100, MinPool: 5},
 		Redis:     RedisConfig{URL: "localhost:6379", Pwd: "redis-password", DB: 2},
-		JWT:       JWTConfig{Secret: "test-secret", Expire: 24, Enable: true},
+		JWT:       JWTConfig{Secret: "test-secret", Expire: 24, TokenCacheExpire: 2, Enable: true},
 		RateLimit: RateLimitConfig{Enable: true, WindowSeconds: 60, MaxRequests: 20},
 	}
 	if Conf != want {

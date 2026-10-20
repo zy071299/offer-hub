@@ -45,9 +45,11 @@ type RedisConfig struct {
 }
 
 type JWTConfig struct {
-	Secret string `toml:"secret"`
-	Expire int    `toml:"expire"` // 单位：小时。
-	Enable bool   `toml:"enable"`
+	// TokenCacheExpire 为后续 token 缓存预留，单位小时；不控制登出黑名单 TTL。
+	TokenCacheExpire int    `toml:"token_cache_expire"`
+	Secret           string `toml:"secret"`
+	Expire           int    `toml:"expire"` // 单位：小时。
+	Enable           bool   `toml:"enable"`
 }
 
 type RateLimitConfig struct {

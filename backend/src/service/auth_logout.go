@@ -76,6 +76,11 @@ func (s *LogoutService) Logout(ctx context.Context, token string) error {
 	return nil
 }
 
+// ParseToken 仅验证 JWT 签名和时间声明，不访问 Redis，供软鉴权复用。
+func (s *LogoutService) ParseToken(token string) (TokenClaims, error) {
+	return s.parseToken(token)
+}
+
 func (s *LogoutService) parseToken(token string) (TokenClaims, error) {
 	if strings.TrimSpace(s.jwtConfig.Secret) == "" {
 		return TokenClaims{}, errors.New("invalid JWT configuration")
