@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"offer-hub/backend/src/data"
 	"offer-hub/backend/src/model"
+	"strings"
 	"time"
 )
 
@@ -12,6 +13,7 @@ type QuestionRepository interface {
 	LoadQuestionCatalog(context.Context, string) (data.QuestionCatalog, error)
 	FilterQuestions(context.Context, data.QuestionFilter) ([]data.Question, int64, error)
 	GetQuestionByID(context.Context, string) (data.Question, error)
+	GetQuestionUserState(context.Context, string, string) (data.QuestionUserState, error)
 	GetHotQuestions(context.Context, string, int) ([]data.Question, error)
 }
 
@@ -124,13 +126,28 @@ func GetQuestionDetail(ctx context.Context, req model.GetQuestionDetailReq) (mod
 	return NewQuestionService(nil).GetQuestionDetail(ctx, req)
 }
 
-// GetQuestionDetail 当前返回完整内容，用户个性化字段与列表一致为零值。
+// GetQuestionDetail 按可信用户身份控制正文、解析及个性化状态。
 func (s *QuestionService) GetQuestionDetail(ctx context.Context, req model.GetQuestionDetailReq) (model.OneQuestion, error) {
 	question, err := s.repository.GetQuestionByID(ctx, req.QuestionID)
 	if err != nil {
 		return model.OneQuestion{}, fmt.Errorf("get question detail: %w", err)
 	}
-	return toOneQuestion(question), nil
+	result := toOneQuestion(question)
+	if strings.TrimSpace(req.UserID) == "" {
+		content := []rune(result.Content)
+		if len(content) > 150 {
+			result.Content = string(content[:150])
+		}
+		return result, nil
+	}
+	state, err := s.repository.GetQuestionUserState(ctx, req.UserID, req.QuestionID)
+	if err != nil {
+		return model.OneQuestion{}, fmt.Errorf("get question user state: %w", err)
+	}
+	result.AnalysisContent = question.AnalysisContent
+	result.UserLiked = state.UserLiked
+	result.UserTag = state.UserTag
+	return result, nil
 }
 
 // toOneQuestion 只转换字段；各接口的内容展示策略由各自业务方法处理。

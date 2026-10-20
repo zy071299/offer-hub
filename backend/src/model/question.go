@@ -18,23 +18,24 @@ type ListQuestionReq struct {
 // OneQuestion 是列表和详情共用的题目信息。
 // 时间格式为 YYYY-MM-DD HH:mm:ss。
 type OneQuestion struct {
-	QuestionID    string   `json:"question_id"`
-	BankList      []string `json:"bank_list"`
-	Title         string   `json:"title"`
-	Content       string   `json:"content"`
-	Difficulty    int      `json:"difficulty"`
-	Tags          []string `json:"tags"`
-	Status        int      `json:"status"`
-	VIP           bool     `json:"vip"`
-	HotDegree     int      `json:"hot_degree"`
-	ViewCount     int      `json:"view_count"`
-	ThumbsUpCount int      `json:"thumbs_up_count"`
-	DislikeCount  int      `json:"dislike_count"`
-	Order         int64    `json:"order"`
-	UserTag       int      `json:"user_tag"`
-	UserLiked     bool     `json:"user_liked"`
-	CreateTime    string   `json:"create_time"`
-	UpdateTime    string   `json:"update_time"`
+	QuestionID      string   `json:"question_id"`
+	BankList        []string `json:"bank_list"`
+	Title           string   `json:"title"`
+	Content         string   `json:"content"`
+	AnalysisContent string   `json:"analysis_content"`
+	Difficulty      int      `json:"difficulty"`
+	Tags            []string `json:"tags"`
+	Status          int      `json:"status"`
+	VIP             bool     `json:"vip"`
+	HotDegree       int      `json:"hot_degree"`
+	ViewCount       int      `json:"view_count"`
+	ThumbsUpCount   int      `json:"thumbs_up_count"`
+	DislikeCount    int      `json:"dislike_count"`
+	Order           int64    `json:"order"`
+	UserTag         int      `json:"user_tag"`
+	UserLiked       bool     `json:"user_liked"`
+	CreateTime      string   `json:"create_time"`
+	UpdateTime      string   `json:"update_time"`
 }
 
 type ListQuestionData struct {
@@ -50,6 +51,7 @@ type ListQuestionResp struct {
 
 type GetQuestionDetailReq struct {
 	QuestionID string `json:"question_id" form:"question_id"`
+	UserID     string `json:"-" form:"-"`
 }
 
 type GetQuestionDetailResp struct {

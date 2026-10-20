@@ -129,23 +129,24 @@ func (r QuestionRepository) LoadQuestionCatalog(ctx context.Context, jobName str
 
 // Question 对应数据字典中的 question 集合，不包含用户动态字段。
 type Question struct {
-	ID            primitive.ObjectID `bson:"_id"`
-	QuestionID    string             `bson:"question_id"`
-	Title         string             `bson:"title"`
-	Content       string             `bson:"content"`
-	BankList      []string           `bson:"bank_list"`
-	JobName       string             `bson:"job_name"`
-	Difficulty    int                `bson:"difficulty"`
-	Tags          []string           `bson:"tags"`
-	Status        int                `bson:"status"`
-	VIP           bool               `bson:"vip"`
-	HotDegree     int                `bson:"hot_degree"`
-	ViewCount     int                `bson:"view_count"`
-	ThumbsUpCount int                `bson:"thumbs_up_count"`
-	DislikeCount  int                `bson:"dislike_count"`
-	Order         int64              `bson:"order"`
-	CreateTime    time.Time          `bson:"create_time"`
-	UpdateTime    time.Time          `bson:"update_time"`
+	ID              primitive.ObjectID `bson:"_id"`
+	QuestionID      string             `bson:"question_id"`
+	Title           string             `bson:"title"`
+	Content         string             `bson:"content"`
+	AnalysisContent string             `bson:"analysis_content"`
+	BankList        []string           `bson:"bank_list"`
+	JobName         string             `bson:"job_name"`
+	Difficulty      int                `bson:"difficulty"`
+	Tags            []string           `bson:"tags"`
+	Status          int                `bson:"status"`
+	VIP             bool               `bson:"vip"`
+	HotDegree       int                `bson:"hot_degree"`
+	ViewCount       int                `bson:"view_count"`
+	ThumbsUpCount   int                `bson:"thumbs_up_count"`
+	DislikeCount    int                `bson:"dislike_count"`
+	Order           int64              `bson:"order"`
+	CreateTime      time.Time          `bson:"create_time"`
+	UpdateTime      time.Time          `bson:"update_time"`
 }
 
 // QuestionFilter 只描述持久化查询条件，不包含 HTTP 或游客展示逻辑。

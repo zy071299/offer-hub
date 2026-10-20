@@ -97,9 +97,11 @@ MySQL 与 MongoDB 必须连接成功；JWT 或限流开启时，Redis 也必须�
 `GET /api/v1/question/detail?question_id=q001`，`question_id` 必填，空白 ID 不接受。
 
 data 层只按 `question_id` 查询 `question`，本次不附加状态过滤，不自增浏览量；没有记录时返回可通过 `errors.Is` 判断的 `ErrQuestionNotFound`。
-service 复用题目字段转换，按当前阶段要求返回完整 `content`，不执行游客 150 字截断，`user_tag=0`、`user_liked=false`。详情内容截断与个性化状态在鉴权模块接入时处理；列表接口原有截断规则保持不变。
+Handler 从软鉴权写入的 Header 读取 `user_id`，不接受 query 中的用户身份。游客的 `content` 按 Unicode 字符截断至前 150 字，`analysis_content=""`、`user_tag=0`、`user_liked=false`，不查询交互集合。登录用户返回完整 `content` 和 `analysis_content`，并按当前用户和题目查询点赞及掌握状态。
 
-成功返回 `GetQuestionDetailResp`（`code: 0, msg: "success", data: OneQuestion`）；参数错误返回业务码 400，题目不存在返回 404，数据库错误返回 500，错误时 `data: null`，HTTP 状态均为 200。详情查询、完整正文、错误分类和路由已由测试覆盖，Mongo 查询使用 mock deployment 验证。
+点赞只匹配 `user_interactions` 中 `target_type=1`、`interaction_type=1`、`status=1` 的记录；掌握状态从 `user_question_tag` 读取 `tag`。无记录时使用零值，任一查询失败返回业务码 500，不返回部分详情。列表接口保持现有展示规则，解析内容仅在登录用户详情中填充。
+
+成功返回 `GetQuestionDetailResp`（`code: 0, msg: "success", data: OneQuestion`）；参数错误返回业务码 400，题目不存在返回 404，数据库错误返回 500，错误时 `data: null`，HTTP 状态均为 200。游客截断、登录用户完整内容、交互状态、错误分类和路由由测试覆盖，Mongo 查询使用 mock deployment 验证。
 
 ## 热门题目列表
 
@@ -148,6 +150,38 @@ JWT 使用 HS256 签名，密钥读取 `JWT.secret`，有效期读取 `JWT.expir
 `GET /api/v1/user_info/get_user_info` 通过强制 JWT 鉴权后，从请求 Header 中读取中间件写入的可信 `user_id`。客户端直接提供的 `user_id` 会被中间件清除，需携带有效且未拉黑的 Bearer token；缺失、无效或过期的 token 返回业务码 `401`。
 
 按 `user_id` 查询 `t_user_info`，成功返回 `code: 0, msg: "success"`，`data` 包含认证文档列出的 14 个 snake_case 字段。`avatar_url` 与 `avatar` 相同，时间格式为 `YYYY-MM-DD HH:mm:ss`，空时间为 `""`；查询不读取密码。用户不存在返回业务码 `404`、`用户不存在`，数据库错误返回 `500`、`服务器内部错误`，错误的 `data` 为 `null`，HTTP 状态均为 200。
+
+## 评论列表
+
+`GET /api/v1/open/list_comments` 位于无需鉴权的 `/api/v1/open` 组，当前不挂鉴权中间件。必填 `target_type`（1题目 / 2面经）和 `target_id`。默认 `page=1`、`page_size=20`、`sort_by=create_time`、`sort_order=desc`；支持按 `create_time` 或 `thumbs_up` 升降序，同值按 `comment_id` 升序。参数错误返回业务码 400，数据库失败返回 500，错误 `data` 为 `null`，HTTP 状态均为 200。
+
+`parent_id` 为空时查询正常顶层评论（`status=2`），批量加载同一目标下的正常子评论，按 `create_time asc, comment_id asc` 分组。`sub_comment_total` 根据实际正常子评论计数，忽略可能过时的 `child_count`；每组按 `sub_comment_page/sub_comment_size` 分页，默认 1/5。`parent_id` 非空时使用 `page/page_size` 查询该父评论的子评论，不再嵌套。列表和子评论空数组均返回 `[]`。
+
+当前页展示的评论者和被回复者资料通过一次 MySQL 批量查询补全，`user_name/reply_to_name` 使用 `username`，`user_avatar` 使用 `avatar`；资料不存在时保留评论、展示字段为空。登录用户通过一次 MongoDB 查询补全所有展示评论的有效点赞（`target_type=3, interaction_type=1, status=1`），游客不查询点赞。时间格式为 `YYYY-MM-DD HH:mm:ss`。
+
+评论 DTO 位于 `src/model/comment.go`，MongoDB 查询和用户资料读取位于 `src/data/comment.go`，组装位于 `src/service/comment.go`，Handler 位于 `src/ctrl/comment/comment.go`。批量子评论查询会读取当前页所有父评论的完整正常回复，以计算各组总数后再分页；尚未进行真实数据库联调。
+
+## 发表评论
+
+`POST /api/v1/comment/add` 挂强制 JWT 鉴权，使用中间件写入 Header 的 `user_id`，忽略请求体中的用户身份。请求字段为 `target_type`（1题目 / 2面经）、必填 `target_id`、非空白 `content`，可选 `parent_id`、`reply_to`。顶层评论的 `reply_to` 必须为空；回复使用同一目标下正常顶层评论的 ID，回复子评论也使用其顶层 ID，`reply_to` 为被回复用户 ID，不产生第三层嵌套。
+
+业务层调用注入的 `tools.FilterSensitiveWords`，仅存储过滤后的内容；基础词表位于 `src/ctrl/tools/sensitive_words.txt`，编译时嵌入，修改后需重新构建。按字面、不区分英文大小写匹配，每个命中字符替换成 `*`。基础词表目前仅含少量示例词，不等同于完整内容审核。
+
+评论的 `_id`、`comment_id` 使用同一个 UUID v4，`status=2`，时间为当前 UTC 时间，计数初始化为零；题目评论的 `question_id=target_id`。插入子评论后，对正常顶层父评论原子增加 `child_count`。父更新失败时尝试删除本次评论，补偿使用独立的 5 秒超时；补偿失败返回 500 并记录错误。此流程不使用跨文档事务，网络导致写入结果不确定或进程中断时仍可能需要核对评论及计数，列表的 `sub_comment_total` 始终由实际正常子评论统计。
+
+成功返回 `code: 0, msg: "success"`，`data` 包含 `comment_id` 和完整 `comment`（用户名、头像、被回复者名称、过滤后内容、时间、空的 `sub_comments`）。校验错误返回 400，无可信身份或作者已不存在返回 401，父评论不存在、跨目标或不是正常顶层评论返回 404，存储和补偿失败返回 500；错误的 `data` 为 `null`，HTTP 状态均为 200。用户资料在写入前批量获取，避免插入成功后因资料查询失败而返回错误。
+
+## 删除评论
+
+`POST /api/v1/comment/delete` 使用强制 JWT 鉴权，请求体为 `{"comment_id":"c1"}`，身份来自中间件写入的 Header。先按评论 ID 查询，再核对作者；删除他人评论返回业务码 403，评论不存在返回 404，空 ID 返回 400，无可信身份返回 401，数据库失败返回 500。本人重复删除返回成功。
+
+数据库更新再次限定 `comment_id + user_id`，只将目标评论 `status` 设为 5 并更新 `update_time`。成功响应严格为 `{"code":0,"msg":"success"}`，不含 `data`；错误响应 `data=null`，HTTP 状态均为 200。该操作不级联删除回复、不修改父评论的缓存计数，列表中的正常回复总数仍按实际 `status=2` 记录统计。
+
+## 修改评论
+
+`POST /api/v1/comment/update` 使用强制 JWT 鉴权，请求体为 `{"comment_id":"c1","content":"修改后的内容"}`。用户身份取自中间件写入的 Header；评论 ID、内容不能为空或纯空白。查询评论并确认作者后，调用 `tools.FilterSensitiveWords` 过滤新内容，存储过滤结果。
+
+更新条件再次限定 `comment_id`、当前作者和 `status != 5`，仅修改 `content`、`update_time`，不改变评论状态及其他字段；并发删除时不再写入内容。成功返回 `{"code":0,"msg":"success","data":{"comment_id":"c1"}}`。他人评论返回业务码 403，不存在或本人已删除的评论返回 404，参数错误返回 400，未认证返回 401，数据库错误返回 500；错误 `data=null`，HTTP 状态均为 200。
 
 ## 本地种子数据
 

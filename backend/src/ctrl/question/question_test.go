@@ -16,15 +16,16 @@ import (
 )
 
 type listStub struct {
-	hotReq      model.GetHotQuestionsReq
-	hotCalls    int
-	detailID    string
-	detailCalls int
-	listReq     model.ListQuestionReq
-	listCalls   int
-	job         string
-	err         error
-	canceled    bool
+	hotReq       model.GetHotQuestionsReq
+	hotCalls     int
+	detailID     string
+	detailUserID string
+	detailCalls  int
+	listReq      model.ListQuestionReq
+	listCalls    int
+	job          string
+	err          error
+	canceled     bool
 }
 
 func (s *listStub) GetAllQuestionList(ctx context.Context, req model.GetAllQuestionListReq) ([]model.GetAllQuestionListData, error) {
@@ -191,9 +192,27 @@ func TestListQuestionsMetaRejectsInvalidParameters(t *testing.T) {
 }
 
 func (s *listStub) GetQuestionDetail(ctx context.Context, req model.GetQuestionDetailReq) (model.OneQuestion, error) {
+	s.detailUserID = req.UserID
 	s.detailID = req.QuestionID
 	s.detailCalls++
 	return model.OneQuestion{QuestionID: req.QuestionID, Title: "Redis", Content: strings.Repeat("中", 200)}, s.err
+}
+
+func TestQuestionDetailIdentityComesOnlyFromHeader(t *testing.T) {
+	for _, userID := range []string{"", "trusted-user"} {
+		s := &listStub{}
+		r := gin.New()
+		r.GET("/detail", NewController(s).GetQuestionDetail)
+		req := httptest.NewRequest("GET", "/detail?question_id=q1&user_id=forged-user", nil)
+		if userID != "" {
+			req.Header.Set("user_id", userID)
+		}
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != 200 || s.detailUserID != userID {
+			t.Fatalf("identity=%q want=%q", s.detailUserID, userID)
+		}
+	}
 }
 
 func TestGetQuestionDetailBindingAndResponses(t *testing.T) {

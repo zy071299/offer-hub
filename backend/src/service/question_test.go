@@ -169,14 +169,14 @@ func (s *catalogStub) GetQuestionByID(ctx context.Context, id string) (data.Ques
 	return s.detail, s.err
 }
 
-func TestGetQuestionDetailReturnsFullContent(t *testing.T) {
+func TestGetQuestionDetailGuestContent(t *testing.T) {
 	content := strings.Repeat("中文🙂", 100)
 	repo := &catalogStub{detail: data.Question{QuestionID: "q1", Title: "Redis", Content: content, Status: 1, Order: 7, ViewCount: 8, CreateTime: time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)}}
 	got, err := NewQuestionService(repo).GetQuestionDetail(context.Background(), model.GetQuestionDetailReq{QuestionID: "q1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if repo.detailID != "q1" || got.QuestionID != "q1" || got.Content != content || got.UserTag != 0 || got.UserLiked || got.Order != 7 || got.ViewCount != 8 || got.CreateTime != "2026-10-19 12:00:00" || got.BankList == nil || got.Tags == nil {
+	if repo.detailID != "q1" || got.QuestionID != "q1" || got.Content != string([]rune(content)[:150]) || got.UserTag != 0 || got.UserLiked || got.Order != 7 || got.ViewCount != 8 || got.CreateTime != "2026-10-19 12:00:00" || got.BankList == nil || got.Tags == nil {
 		t.Fatalf("incorrect detail response: %+v", got)
 	}
 	for _, failure := range []error{data.ErrQuestionNotFound, errors.New("database failed")} {
@@ -184,6 +184,62 @@ func TestGetQuestionDetailReturnsFullContent(t *testing.T) {
 		if _, err := NewQuestionService(repo).GetQuestionDetail(context.Background(), model.GetQuestionDetailReq{QuestionID: "q1"}); !errors.Is(err, failure) {
 			t.Fatalf("lost error classification: %v", err)
 		}
+	}
+}
+
+func (*catalogStub) GetQuestionUserState(context.Context, string, string) (data.QuestionUserState, error) {
+	return data.QuestionUserState{}, nil
+}
+
+type detailStateRepo struct {
+	catalogStub
+	state              data.QuestionUserState
+	stateErr           error
+	stateCalls         int
+	userID, questionID string
+}
+
+func (r *detailStateRepo) GetQuestionUserState(_ context.Context, userID, questionID string) (data.QuestionUserState, error) {
+	r.stateCalls++
+	r.userID = userID
+	r.questionID = questionID
+	return r.state, r.stateErr
+}
+func TestQuestionDetailVisibilityAndPersonalization(t *testing.T) {
+	for _, userID := range []string{"", "user1"} {
+		for _, content := range []string{"", "短🙂", strings.Repeat("中", 149) + "🙂尾"} {
+			r := &detailStateRepo{catalogStub: catalogStub{detail: data.Question{QuestionID: "q1", Content: content, AnalysisContent: "完整解析"}}, state: data.QuestionUserState{UserLiked: true, UserTag: 3}}
+			got, err := NewQuestionService(r).GetQuestionDetail(context.Background(), model.GetQuestionDetailReq{QuestionID: "q1", UserID: userID})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if userID == "" {
+				want := []rune(content)
+				if len(want) > 150 {
+					want = want[:150]
+				}
+				if got.Content != string(want) || got.AnalysisContent != "" || got.UserLiked || got.UserTag != 0 || r.stateCalls != 0 {
+					t.Fatalf("guest leaked data %+v", got)
+				}
+			} else if got.Content != content || got.AnalysisContent != "完整解析" || !got.UserLiked || got.UserTag != 3 || r.userID != "user1" || r.questionID != "q1" {
+				t.Fatalf("incorrect logged in response %+v", got)
+			}
+		}
+	}
+	r := &detailStateRepo{catalogStub: catalogStub{detail: data.Question{QuestionID: "q1"}}}
+	got, err := NewQuestionService(r).GetQuestionDetail(context.Background(), model.GetQuestionDetailReq{QuestionID: "q1", UserID: "user1"})
+	if err != nil || got.UserLiked || got.UserTag != 0 {
+		t.Fatalf("missing state %+v %v", got, err)
+	}
+	failure := errors.New("state lookup failed")
+	r.stateErr = failure
+	if _, err := NewQuestionService(r).GetQuestionDetail(context.Background(), model.GetQuestionDetailReq{QuestionID: "q1", UserID: "user1"}); !errors.Is(err, failure) {
+		t.Fatalf("state error lost %v", err)
+	}
+	r.err = data.ErrQuestionNotFound
+	r.stateCalls = 0
+	if _, err := NewQuestionService(r).GetQuestionDetail(context.Background(), model.GetQuestionDetailReq{QuestionID: "missing", UserID: "user1"}); !errors.Is(err, data.ErrQuestionNotFound) || r.stateCalls != 0 {
+		t.Fatal("state queried for missing question")
 	}
 }
 

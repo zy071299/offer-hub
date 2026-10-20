@@ -135,6 +135,7 @@ func (ctrl *Controller) GetQuestionDetail(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"code": 400, "msg": "question_id 必填", "data": nil})
 		return
 	}
+	req.UserID = c.GetHeader("user_id")
 	result, err := ctrl.service.GetQuestionDetail(c.Request.Context(), req)
 	if errors.Is(err, service.ErrQuestionNotFound) {
 		c.JSON(http.StatusOK, gin.H{"code": 404, "msg": "题目不存在", "data": nil})
