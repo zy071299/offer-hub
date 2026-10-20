@@ -1,0 +1,17 @@
+{
+  "name": "offer-hub-testdata",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local MongoDB seed data for Offer Hub",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "seed:banks": "node insert_bank_and_series.js",
+    "seed:questions": "node insert_question.js",
+    "seed": "node insert_bank_and_series.js && node insert_question.js",
+    "test": "node --test test/*.test.cjs"
+  },
+  "dependencies": {
+    "@iarna/toml": "2.2.5",
+    "mongodb": "6.20.0"
+  }
+}

@@ -108,3 +108,7 @@ service 复用题目字段转换，按当前阶段要求返回完整 `content`�
 独立的 data 查询固定过滤 `status = 1`，可按 `job_name` 精确过滤，按 `hot_degree` 降序、同热度按 `question_id` 升序，不复用 `FilterQuestions` 的浏览量排序。Mongo 查询投影及接口列表项仅含 `question_id`、`bank_list`、`title`、`view_count`（Mongo `_id` 不返回）。
 
 service 返回 `GetHotQuestionsResp`，复用已有热门列表 DTO，空结果返回 `data.list: []`。成功业务码 0，参数错误 400，数据库失败 500，HTTP 状态均为 200。查询命令、字段投影、默认 limit、过滤和错误响应由测试覆盖；尚未进行真实 MongoDB 联调。
+
+## 本地种子数据
+
+参见 `testdata/README.md`。填写 `config-test.toml` 的 MongoDB 配置后，在 `backend/testdata` 执行 `npm.cmd ci --ignore-scripts`、`npm.cmd run seed`；脚本依次创建系列/题库和题目，可顺序重复执行。
